@@ -330,11 +330,11 @@
   #print-area { display: none; }
   @media print {
     header { position: static; }
-    @page { size: A4; margin: 2.97mm 2.1mm; } /* 約98%に縮小して配置（プリンタの印刷不可領域での欠けを防ぐ） */
-    body * { visibility: hidden; }
-    #print-area, #print-area * { visibility: visible; }
-    #print-area { display: block; position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 0; }
-    #print-area canvas { width: 100%; height: auto; display: block; margin: 0; padding: 0; }
+    /* 余白0で実寸印刷（用紙端の余白はPDF側で確保済み。ここで縮めると伝票が小さくなる） */
+    @page { size: A4; margin: 0; }
+    body > *:not(#print-area) { display: none !important; }
+    #print-area { display: block; margin: 0; padding: 0; }
+    #print-area canvas { display: block; margin: 0; padding: 0; } /* 大きさはprintViaCanvasで指定（A4は210×296.8mm。297mmちょうどだと端数で白紙ページが出ることがあるため） */
     #print-area canvas:not(:last-child) { page-break-after: always; }
   }
 
@@ -1289,7 +1289,7 @@ async function printViaCanvas(pdfBytes, title) {
   const pdf = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
   const printArea = document.getElementById('print-area');
   printArea.innerHTML = '';
-  const scale = 2; // 約144dpi相当
+  const scale = 300 / 72; // 300dpi相当（144dpiでは印刷がぼやけたため）
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const viewport = page.getViewport({ scale });
@@ -1297,6 +1297,12 @@ async function printViaCanvas(pdfBytes, title) {
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    // 用紙(A4縦)に実寸で。添付PDFがA4より大きい・横長などの場合は縦横比を保って用紙に収める
+    const base = page.getViewport({ scale: 1 });
+    const wMm = base.width / 72 * 25.4, hMm = base.height / 72 * 25.4;
+    const fit = Math.min(1, 210 / wMm, 296.8 / hMm);
+    canvas.style.width = (wMm * fit) + 'mm';
+    canvas.style.height = (hMm * fit) + 'mm';
     printArea.appendChild(canvas);
   }
   // 印刷ダイアログの「PDFに保存」はページのタイトルをファイル名の候補にするため、印刷中だけ差し替える
@@ -1502,14 +1508,17 @@ async function buildPdfBytes(withCopy, statusEl) {
   };
 
   // ─ A4配置 ─
-  // テンプレートは用紙端ぎりぎり(約4mm)まで印字があり、プリンタの印刷不可領域で上下端(事業所名等)が欠けるため、
-  // 伝票を縮小して左右中央に配置し、上の伝票は用紙上端から・下の伝票は用紙下端から余白を取る（切取り線とは重ならない）
-  // 下端はプリンタの印刷不可領域が大きいことが多いため、下の伝票は切取り線側の空きを詰めて下端の余白を広めに取る
-  const SLIP_SCALE = 0.97;
-  const SLIP_TOP_MARGIN = 9;     // pt（約3.2mm）上の伝票の上端余白
-  const SLIP_BOTTOM_MARGIN = 12; // pt（約4.2mm）下の伝票の下端余白
-  const slipTx = (A4_W - A5_W * SLIP_SCALE) / 2;
-  const slipTy = (yOffset) => yOffset > 0 ? A4_H - SLIP_TOP_MARGIN - A4_H * SLIP_SCALE : SLIP_BOTTOM_MARGIN;
+  // 入金伝票のテンプレートは印字範囲（下のSLIP_CONTENT）が高さ約400ptで、A4の半分(421pt)に余白付きで収まるため、
+  // 縮小せず実寸(100%)で配置する。プリンタの印刷不可領域で欠けないよう、ページ端ではなく「印字範囲」から
+  // 用紙端までを SLIP_EDGE 空ける（上の伝票は用紙上端から、下の伝票は用紙下端から）。左右は印字範囲を中央に。
+  // （他の伝票アプリは97%縮小＋上端9pt/下端12ptの余白。あちらのテンプレートは用紙端近くまで印字があるため）
+  const SLIP_SCALE = 1.0;
+  const SLIP_CONTENT = { left: 45.8, top: 16.2, right: 571.5, bottom: 415.8 }; // テンプレートの印字範囲（pt、上端・左端から。実測）
+  const SLIP_EDGE = 14.2; // pt（5mm）印字範囲と用紙端の間隔
+  const slipTx = (A4_W - SLIP_SCALE * (SLIP_CONTENT.left + SLIP_CONTENT.right)) / 2;
+  const slipTy = (yOffset) => yOffset > 0
+    ? A4_H - SLIP_EDGE + SLIP_SCALE * SLIP_CONTENT.top - SLIP_SCALE * A4_H   // 上の伝票：印字範囲の上端を用紙上端から5mm
+    : SLIP_EDGE - SLIP_SCALE * (A5_H - SLIP_CONTENT.bottom);                 // 下の伝票：印字範囲の下端を用紙下端から5mm
   const slots = withCopy ? [A4_H - A5_H, 0] : [A4_H - A5_H];
   const a4Page = a4Doc.addPage([A4_W, A4_H]);
   for (const yOffset of slots) {
