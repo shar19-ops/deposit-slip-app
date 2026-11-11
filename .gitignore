@@ -1,0 +1,5 @@
+*.json.bak
+/data/
+# 実データ（保存した伝票JSON）はコミットしない
+入金伝票_*.json
+tools/out/
