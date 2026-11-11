@@ -86,5 +86,10 @@ PyMuPDFで画像化して確認。
 ### 未了
 
 - [x] アイコン（2026-11-11。元画像 `MCフォルダ\アプリ用アイコン集\伝票\入金伝票.png` 392px から 512/192/180/48/32px を作成。512は拡大）
-- [ ] GitHubリポジトリ作成・GitHub Pages 公開
+- [x] GitHubリポジトリ作成・GitHub Pages 公開（2026-11-11、public・master ブランチのルート）
+  - リポジトリ: https://github.com/shar19-ops/deposit-slip-app
+  - URL: https://shar19-ops.github.io/deposit-slip-app/ （index.html から 入金伝票.html へ移動）
+
+補足: Chromeの印刷プレビューでは白紙の2ページ目が表示されるが、実際の印刷は1枚のみ（ユーザー確認。他の伝票アプリと同じ）。
+同日、他の伝票アプリ5本も印刷の画像化を300dpiに変更（大きさはそのまま）。
 - [x] 試し刷り（実寸100%・300dpiで欠けなし、2026-11-11）
